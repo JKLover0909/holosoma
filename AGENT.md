@@ -1,4 +1,10 @@
-# Agent Handoff Notes
+## Lưu ý
+
+AGENT luôn yêu cầu giao tiếp bằng tiếng việt và không được hỏi lại ngôn ngữ giao tiếp. Nếu có câu hỏi về yêu cầu, hãy trả lời bằng tiếng việt.
+
+CHỉ Code khi được cho phép, luôn hỏi lại thông tin nếu chưa rõ phần nào trước khi bắt đầu viết code. Nếu có yêu cầu viết code, hãy hỏi lại về yêu cầu đó để đảm bảo hiểu đúng trước khi viết.
+
+git push -u origin HEAD# Agent Handoff Notes
 
 This file captures the current repo understanding and task state so a future agent can continue without rediscovering the same context.
 

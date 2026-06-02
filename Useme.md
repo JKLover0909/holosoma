@@ -1,230 +1,21 @@
-# Holosoma G1 29-DOF Quick Use
+# Holosoma G1 Arm-Hold PPO Runbook
 
-Ghi chú nhanh để train policy locomotion cho Unitree G1 29-DOF bằng MJWarp, export ONNX, rồi chạy sim-to-sim trong MuJoCo.
+Task hiện tại: train G1 29-DOF locomotion với hai tay được PD giữ ở tư thế bê vật. Chưa thêm payload/khối lượng.
 
-## 1. Train Policy
-
-Kích hoạt môi trường MuJoCo/MJWarp:
-
-```bash
-unset CONDA_ENV_NAME
-unset LD_LIBRARY_PATH
-source scripts/source_mujoco_setup.sh
-```
-
-Train không dùng W&B:
-
-```bash
-python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof \
-  simulator:mjwarp \
-  logger:disabled
-```
-
-Hoặc train với W&B offline:
-
-```bash
-python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof \
-  simulator:mjwarp \
-  logger:wandb-offline
-```
-
-Checkpoint và ONNX được lưu trong:
+Preset dùng:
 
 ```text
-logs/hv-g1-manager/<timestamp>-g1_29dof_manager-locomotion/
+exp:g1-29dof-arm-hold
 ```
 
-Tìm ONNX mới nhất:
-
-```bash
-find logs/hv-g1-manager -name '*.onnx' | sort | tail
-```
-
-## 2. Chạy MuJoCo Simulator
-
-Mở terminal thứ nhất:
-
-```bash
-unset CONDA_ENV_NAME
-unset LD_LIBRARY_PATH
-source scripts/source_mujoco_setup.sh
-
-python src/holosoma/holosoma/run_sim.py robot:g1-29dof \
-  --simulator.config.bridge.enabled=True \
-  --simulator.config.bridge.interface eno1
-```
-
-Nếu máy đang dùng Wi-Fi thay vì LAN, đổi `eno1` thành `wlp131s0` ở cả terminal simulator và terminal policy.
-
-## 3. Chạy ONNX Policy
-
-Mở terminal thứ hai:
-
-```bash
-unset CONDA_ENV_NAME
-unset LD_LIBRARY_PATH
-source scripts/source_inference_setup.sh
-
-python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29dof-loco \
-  --task.model-path logs/hv-g1-manager/20260527_090254-g1_29dof_manager-locomotion/model_24999.onnx \
-  --task.no-use-joystick \
-  --task.interface eno1
-```
-
-Thay `--task.model-path` bằng file `.onnx` bạn muốn chạy.
-
-## 4. Trình Tự Điều Khiển
-
-Trong cửa sổ MuJoCo:
-
-| Phím | Tác dụng |
-| --- | --- |
-| `8` | Hạ robot xuống đất |
-| `9` | Bỏ gantry/giá treo |
-| `Backspace` | Reset simulation |
-
-Trong terminal chạy `run_policy.py`:
-
-| Phím | Tác dụng |
-| --- | --- |
-| `]` | Start policy |
-| `o` | Stop policy |
-| `i` | Đưa robot về default pose |
-| `=` | Chuyển standing/walking mode |
-| `w` | Tiến |
-| `s` | Lùi |
-| `a` | Sang trái |
-| `d` | Sang phải |
-| `q` | Xoay trái |
-| `e` | Xoay phải |
-
-## 5. Lưu Ý Quan Trọng
-
-- Luôn `unset LD_LIBRARY_PATH` trước khi source môi trường MuJoCo hoặc inference để tránh conflict thư viện DDS/IsaacSim.
-- Bridge simulator và policy phải dùng cùng interface, ví dụ cùng là `eno1` hoặc cùng là `wlp131s0`.
-- Không dùng placeholder kiểu `<path-to-model>.onnx` trong shell. Hãy thay bằng path thật và bỏ dấu `< >`.
-- Nếu `source scripts/source_inference_setup.sh` báo thiếu env `hsinference`, chạy:
-
-```bash
-bash scripts/setup_inference.sh
-```
-
-## 6. Deploy Lên Robot Thật
-
-Khi deploy lên robot thật, không chạy `run_sim.py`. Chỉ chạy `run_policy.py`; policy sẽ giao tiếp trực tiếp với robot qua Ethernet.
+W&B:
 
 ```text
-Robot thật <--> run_policy.py
+Project: https://wandb.ai/12wuu115-post-and-telecommunication-institute-of-technology/hv-g1-manager
+Run:     https://wandb.ai/12wuu115-post-and-telecommunication-institute-of-technology/hv-g1-manager/runs/8ohgu33d
 ```
 
-### Chuẩn Bị Unitree G1
-
-- Treo robot lên gantry khi test lần đầu.
-- Bật robot và tay điều khiển.
-- Cắm Ethernet từ robot vào laptop.
-- Đưa robot về damping mode.
-- Nhấn `L2 + R2` trên controller để vào development mode.
-
-### Cấu Hình Mạng
-
-Interface laptop nối với G1 cần cấu hình:
-
-```text
-IP Address: 192.168.123.224
-Netmask:    255.255.255.0
-```
-
-Tìm interface đang nối robot:
-
-```bash
-ip -br addr
-```
-
-Nếu cắm LAN, thường dùng `eno1`. Nếu tên interface khác, thay `eno1` trong command bên dưới.
-
-### Chạy Policy Trên Robot Thật
-
-Kích hoạt inference env:
-
-```bash
-unset CONDA_ENV_NAME
-unset LD_LIBRARY_PATH
-source scripts/source_inference_setup.sh
-```
-
-Chạy bằng joystick:
-
-```bash
-python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29dof-loco \
-  --task.model-path logs/hv-g1-manager/20260527_090254-g1_29dof_manager-locomotion/model_24999.onnx \
-  --task.use-joystick \
-  --task.interface eno1
-```
-
-Chạy bằng bàn phím trong terminal:
-
-```bash
-python3 src/holosoma_inference/holosoma_inference/run_policy.py inference:g1-29dof-loco \
-  --task.model-path logs/hv-g1-manager/20260527_090254-g1_29dof_manager-locomotion/model_24999.onnx \
-  --task.no-use-joystick \
-  --task.interface eno1
-```
-
-### Phím Điều Khiển Robot Thật
-
-Joystick:
-
-| Nút | Tác dụng |
-| --- | --- |
-| `A` | Start policy |
-| `B` | Stop policy |
-| `Y` | Đưa robot về default pose |
-| `Start` | Chuyển standing/walking mode |
-| `L1 + R1` | Kill controller |
-| Left stick | Đi tới/lùi/trái/phải |
-| Right stick | Xoay trái/phải |
-
-Keyboard trong terminal policy:
-
-| Phím | Tác dụng |
-| --- | --- |
-| `]` | Start policy |
-| `o` | Stop policy |
-| `i` | Đưa robot về default pose |
-| `=` | Chuyển standing/walking mode |
-| `w` `a` `s` `d` | Đi tới/lùi/trái/phải |
-| `q` `e` | Xoay trái/phải |
-
-### An Toàn
-
-- Luôn test policy mới khi robot đang treo gantry.
-- Chỉ start policy khi robot đã vào đúng mode và network đã ổn định.
-- Luôn sẵn sàng emergency stop hoặc `L1 + R1`.
-- Không đứng gần robot khi chuyển sang walking mode.
-
-
-## 7. Cấu Hình SSH Server + RTX 5060 Ti 16GB + No Display
-
-Máy này chạy qua SSH, không có màn hình/X11. Ưu tiên chạy IsaacSim ở headless mode, tắt video, và không dùng lệnh preview GUI.
-
-### Kiểm Tra GPU/Driver
-
-```bash
-nvidia-smi
-```
-
-Nếu không thấy RTX 5060 Ti hoặc CUDA driver báo lỗi, xử lý driver trước rồi mới setup IsaacSim.
-
-### Setup IsaacSim
-
-```bash
-cd /home/jkl0909/Code/rl/holosoma
-OMNI_KIT_ACCEPT_EULA=1 bash scripts/setup_isaacsim.sh
-```
-
-### Kích Hoạt Môi Trường
+## 1. Kích Hoạt Môi Trường
 
 ```bash
 cd /home/jkl0909/Code/rl/holosoma
@@ -236,63 +27,177 @@ source scripts/source_isaacsim_setup.sh
 
 `unset DISPLAY` giúp IsaacSim không cố bám vào display ảo/cũ khi chạy qua SSH.
 
-### Train IsaacSim Headless
+## 2. Fix IsaacSim URDF Importer Libs
 
-RTX 5060 Ti 16GB nên bắt đầu với `1024` hoặc `2048` env. Nếu VRAM còn dư thì tăng dần lên `4096`.
+IsaacSim trên máy này cần thêm `libxml2.so.2`, ICU 73 và asset converter libs vào `LD_LIBRARY_PATH`.
 
 ```bash
-python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof-wbt \
-  simulator:isaacsim \
-  logger:disabled \
-  --training.headless=True \
-  --training.num-envs=1024 \
-  --logger.video.enabled=False
+export ASSET_CONVERTER_LIBS="$CONDA_PREFIX/lib/python3.11/site-packages/isaacsim/extscache/omni.kit.asset_converter-5.0.17+107.3.1.lx64.r.cp311.u353/asset_converter_native_bindings/libs"
+export OLD_LIBXML2="/home/jkl0909/.holosoma_deps/miniconda3/pkgs/libxml2-2.13.9-h2c43086_0/lib"
+export ICU73="/home/jkl0909/.holosoma_deps/miniconda3/pkgs/icu-73.1-h6a678d5_0/lib"
+export LD_LIBRARY_PATH="$ASSET_CONVERTER_LIBS:$OLD_LIBXML2:$ICU73:$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 ```
 
-Nếu muốn train locomotion thay vì WBT:
+Kiểm tra nhanh:
 
 ```bash
-python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof \
-  simulator:isaacsim \
-  logger:disabled \
-  --training.headless=True \
-  --training.num-envs=1024 \
-  --logger.video.enabled=False
+ldd "$ASSET_CONVERTER_LIBS/libomniverse_asset_converter.so" | grep -E "libxml2.so.2|libicuuc.so.73|not found"
 ```
 
-### Chạy Qua SSH Bền Hơn
+Không được còn:
 
-Dùng `tmux` để job không chết khi mất SSH:
+```text
+libxml2.so.2 => not found
+libicuuc.so.73 => not found
+```
+
+## 3. Train Qua SSH Bằng Tmux
 
 ```bash
-tmux new -s holosoma
+tmux new -s g1-arm-hold
 cd /home/jkl0909/Code/rl/holosoma
 unset CONDA_ENV_NAME
 unset LD_LIBRARY_PATH
 unset DISPLAY
 source scripts/source_isaacsim_setup.sh
-python src/holosoma/holosoma/train_agent.py \
-  exp:g1-29dof-wbt \
+
+export ASSET_CONVERTER_LIBS="$CONDA_PREFIX/lib/python3.11/site-packages/isaacsim/extscache/omni.kit.asset_converter-5.0.17+107.3.1.lx64.r.cp311.u353/asset_converter_native_bindings/libs"
+export OLD_LIBXML2="/home/jkl0909/.holosoma_deps/miniconda3/pkgs/libxml2-2.13.9-h2c43086_0/lib"
+export ICU73="/home/jkl0909/.holosoma_deps/miniconda3/pkgs/icu-73.1-h6a678d5_0/lib"
+export LD_LIBRARY_PATH="$ASSET_CONVERTER_LIBS:$OLD_LIBXML2:$ICU73:$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+
+DISPLAY= python src/holosoma/holosoma/train_agent.py \
+  exp:g1-29dof-arm-hold \
+  logger:wandb \
   simulator:isaacsim \
-  logger:disabled \
-  --training.headless=True \
-  --training.num-envs=1024 \
-  --logger.video.enabled=False
+  --logger.video.enabled False
 ```
 
-Thoát khỏi tmux nhưng giữ job chạy: `Ctrl-b`, rồi `d`.
+Thoát khỏi tmux nhưng giữ job chạy:
+
+```text
+Ctrl-b, rồi d
+```
 
 Quay lại session:
 
 ```bash
-tmux attach -t holosoma
+tmux attach -t g1-arm-hold
 ```
 
-### Tăng/Giảm Theo VRAM
+## 4. Kiểm Tra W&B
 
-- Nếu `nvidia-smi` báo gần hết VRAM hoặc bị OOM: giảm `--training.num-envs=512`.
-- Nếu còn nhiều VRAM: thử `--training.num-envs=2048`, sau đó `4096`.
-- Không chạy `--training.headless=False` trên SSH server no display, trừ khi đã cấu hình X server/VNC/VirtualGL.
-- Không dùng `demo_scripts/train_g1_armhold_isaacsim.sh` trong repo hiện tại vì file này chưa tồn tại.
+```bash
+wandb status
+```
+
+Nếu chưa login:
+
+```bash
+wandb login
+```
+
+Khi train, mở `View run` để xem lần train hiện tại. Mở `View project` để so sánh nhiều run.
+
+## 5. Metric Ưu Tiên Theo Dõi
+
+Quan trọng nhất:
+
+```text
+Train/mean_episode_length
+Train/mean_reward
+Env/average_episode_length
+Env/penalty_scale
+Episode/rew_tracking_lin_vel
+Episode/rew_tracking_ang_vel
+Episode/rew_alive
+Episode/rew_pose
+Episode/rew_penalty_orientation
+Episode/rew_penalty_action_rate
+```
+
+Dấu hiệu tốt:
+
+```text
+average_episode_length tăng
+rew_alive tăng
+tracking reward tăng
+action_clip_frac gần 0
+KL khoảng 0.01-0.02
+FPS ổn định
+```
+
+Dấu hiệu cần chú ý:
+
+```text
+rew_pose tụt sâu
+rew_penalty_orientation âm mạnh hơn
+rew_penalty_action_rate âm mạnh hơn
+mean_episode_length tụt lâu không hồi
+loss NaN
+GPU memory chạm trần
+```
+
+## 6. Checkpoint Và ONNX
+
+Checkpoint và log được lưu trong:
+
+```text
+logs/hv-g1-manager/<timestamp>-g1_29dof_arm_hold_ppo-locomotion/
+```
+
+Tìm checkpoint mới nhất:
+
+```bash
+find logs/hv-g1-manager -name 'model_*.pt' | sort | tail
+```
+
+Tìm ONNX mới nhất:
+
+```bash
+find logs/hv-g1-manager -name '*.onnx' | sort | tail
+```
+
+## 7. Eval Checkpoint
+
+```bash
+DISPLAY= python src/holosoma/holosoma/eval_agent.py \
+  --checkpoint=/path/to/model_xxxxx.pt \
+  --training.max-eval-steps=1000 \
+  --logger.video.enabled False
+```
+
+Nếu cần export ONNX trong eval:
+
+```bash
+DISPLAY= python src/holosoma/holosoma/eval_agent.py \
+  --checkpoint=/path/to/model_xxxxx.pt \
+  --training.export-onnx True \
+  --training.max-eval-steps=1000 \
+  --logger.video.enabled False
+```
+
+## 8. Ghi Chú Task
+
+Task này đang giữ tay bằng PD target cố định. Policy vẫn output 29 action để tránh phá pipeline PPO/export, nhưng action của 14 khớp tay bị override bởi `FixedJointPositionActionTerm`.
+
+Pose tay:
+
+```text
+left_shoulder_pitch_joint  = -0.75
+left_shoulder_roll_joint   =  0.35
+left_shoulder_yaw_joint    =  0.08
+left_elbow_joint           =  0.60
+left_wrist_roll_joint      =  0.00
+left_wrist_pitch_joint     =  0.20
+left_wrist_yaw_joint       =  0.00
+right_shoulder_pitch_joint = -0.75
+right_shoulder_roll_joint  = -0.40
+right_shoulder_yaw_joint   =  0.35
+right_elbow_joint          =  0.65
+right_wrist_roll_joint     =  0.00
+right_wrist_pitch_joint    = -0.10
+right_wrist_yaw_joint      =  0.00
+```
+
+Chưa thêm payload. Bước tiếp theo sau khi locomotion ổn là thêm payload/randomization khi train, không chỉ eval.
